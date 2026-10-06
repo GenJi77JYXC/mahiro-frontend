@@ -1,100 +1,186 @@
 <template>
   <div class="home-container">
-    <el-card class="shorten-card">
-      <h2>创建短链</h2>
+    <div class="hero">
+      <h1 class="title">🔗 短链生成器</h1>
+      <p class="subtitle">把长链接变短，简洁高效</p>
+    </div>
 
-      <el-form :model="shortenForm" label-width="120px">
-        <el-form-item label="原链接">
-          <el-input v-model="shortenForm.url" placeholder="请输入完整链接" />
-        </el-form-item>
-
-        <el-form-item label="自定义短码（可选）">
-          <el-input v-model="shortenForm.custom_code" placeholder="如 myblog" />
-        </el-form-item>
-
-        <el-form-item label="过期天数（可选）">
-          <el-input-number v-model="shortenForm.expire_days" :min="1" :max="365" />
+    <el-card class="shorten-card" shadow="hover">
+      <el-form :model="shortenForm" @submit.prevent="handleShorten">
+        <el-form-item>
+          <el-input
+            v-model="shortenForm.url"
+            placeholder="粘贴你的长链接，例如 https://example.com/very/long/path"
+            size="large"
+            clearable
+            :prefix-icon="Link"
+            @keyup.enter="handleShorten"
+          />
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleShorten">
+          <el-button
+            type="primary"
+            size="large"
+            :loading="loading"
+            class="submit-btn"
+            @click="handleShorten"
+          >
             生成短链
           </el-button>
         </el-form-item>
+      </el-form>
 
-        <el-form-item v-if="shortUrl">
-          <el-tag type="success" effect="dark">
-            短链生成成功：{{ shortUrl }}
-          </el-tag>
-          <el-button type="primary" size="small" @click="copyShortUrl">
+      <div v-if="result" class="result-box">
+        <div class="result-label">生成成功</div>
+        <div class="result-url">
+          <a :href="result.short_url" target="_blank" rel="noopener">{{ result.short_url }}</a>
+        </div>
+        <div class="result-actions">
+          <el-button type="primary" size="small" @click="copyUrl">
+            <el-icon><DocumentCopy /></el-icon>
             复制
           </el-button>
-        </el-form-item>
-      </el-form>
+          <el-button size="small" @click="reset">再生成一个</el-button>
+        </div>
+      </div>
     </el-card>
 
-    <div class="links-link">
-      <el-link type="primary" @click="goMyLinks">查看我的短链 →</el-link>
-    </div>
+    <p class="tip">
+      仅支持 http / https 链接，内网地址将被拦截。每个 IP 限流 10 QPS。
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { shorten } from '@/api'
+import { Link, DocumentCopy } from '@element-plus/icons-vue'
+import { shorten, type ShortenResponse } from '@/api'
 
-const router = useRouter()
 const loading = ref(false)
-const shortUrl = ref('')
+const result = ref<ShortenResponse | null>(null)
 
 const shortenForm = reactive({
   url: '',
-  custom_code: '',
-  expire_days: 30
 })
 
 const handleShorten = async () => {
-  if (!shortenForm.url) {
-    ElMessage.error('请输入原链接')
+  const url = shortenForm.url.trim()
+  if (!url) {
+    ElMessage.warning('请输入链接')
     return
   }
 
   loading.value = true
+  result.value = null
   try {
-    const res = await shorten(shortenForm)
-    shortUrl.value = res.short_url
+    const res = await shorten({ url })
+    result.value = res
     ElMessage.success('短链生成成功！')
-  } catch (error) {
-    ElMessage.error('生成失败')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '生成失败')
   } finally {
     loading.value = false
   }
 }
 
-const copyShortUrl = () => {
-  navigator.clipboard.writeText(shortUrl.value)
+const copyUrl = () => {
+  if (!result.value) return
+  navigator.clipboard.writeText(result.value.short_url)
   ElMessage.success('已复制到剪贴板')
 }
 
-const goMyLinks = () => {
-  router.push('/my-links')
+const reset = () => {
+  shortenForm.url = ''
+  result.value = null
 }
 </script>
 
 <style scoped>
 .home-container {
-  padding: 40px;
-  max-width: 800px;
+  max-width: 640px;
   margin: 0 auto;
+  padding: 60px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.title {
+  font-size: 32px;
+  margin: 0 0 8px;
+  color: #409eff;
+}
+
+.subtitle {
+  margin: 0;
+  color: #909399;
+  font-size: 15px;
 }
 
 .shorten-card {
-  margin-bottom: 20px;
+  width: 100%;
+  border-radius: 12px;
 }
 
-.links-link {
+.submit-btn {
+  width: 100%;
+}
+
+.result-box {
+  margin-top: 8px;
+  padding: 16px;
+  background: #f0f9eb;
+  border-radius: 8px;
+  border: 1px solid #e1f3d8;
+}
+
+.result-label {
+  font-size: 13px;
+  color: #67c23a;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.result-url {
+  font-size: 18px;
+  font-weight: 600;
+  word-break: break-all;
+  margin-bottom: 12px;
+}
+
+.result-url a {
+  color: #409eff;
+  text-decoration: none;
+}
+.result-url a:hover {
+  text-decoration: underline;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tip {
+  margin-top: 24px;
+  font-size: 13px;
+  color: #909399;
   text-align: center;
+}
+
+@media (max-width: 600px) {
+  .home-container {
+    padding: 40px 16px;
+  }
+  .title {
+    font-size: 26px;
+  }
 }
 </style>
